@@ -12,6 +12,7 @@ type stmtOp string
 const (
 	opSelect stmtOp = "SELECT"
 	opInsert stmtOp = "INSERT"
+	opUpdate stmtOp = "UPDATE"
 	opDelete stmtOp = "DELETE"
 )
 
@@ -39,7 +40,7 @@ func (s *stmt) Select(cols ...string) *stmt {
 	return ns
 }
 
-func (s *stmt) Insert(models ...map[string]any) *stmt {
+func (s *stmt) Model(models ...map[string]any) *stmt {
 	ns := s.clone()
 	ns.models = append(ns.models, models...)
 	return ns
@@ -51,6 +52,8 @@ func (s *stmt) SQL() string {
 		return s.selectSql()
 	case opInsert:
 		return s.insertSql()
+	case opUpdate:
+		return s.updateSql()
 	case opDelete:
 		return s.deleteSql()
 	default:
@@ -102,6 +105,29 @@ func (s *stmt) insertSql() string {
 		strings.Join(cols, ", "),
 		strings.Join(values, ", "),
 	)
+}
+
+func (s *stmt) updateSql() string {
+	updates := []string{}
+	for _, m := range s.models {
+		values := []string{}
+		for k, v := range m {
+			switch v := v.(type) {
+			case string:
+				values = append(values, fmt.Sprintf("%q='%s'", k, v))
+			default:
+				values = append(values, fmt.Sprintf("%q=%v", k, v))
+			}
+		}
+		u := fmt.Sprintf(
+			"%s %q SET %s",
+			opUpdate,
+			s.table.name,
+			strings.Join(values, ", "),
+		)
+		updates = append(updates, u)
+	}
+	return strings.Join(updates, "; ")
 }
 
 func (s *stmt) deleteSql() string {

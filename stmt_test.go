@@ -9,6 +9,7 @@ import (
 var (
 	mockSelectStmt = &stmt{op: opSelect}
 	mockInsertStmt = &stmt{op: opInsert}
+	mockUpdateStmt = &stmt{op: opUpdate}
 	mockDeleteStmt = &stmt{op: opDelete}
 )
 
@@ -26,16 +27,33 @@ func TestInsert(t *testing.T) {
 	mockInsertUser := mockInsertStmt.Table("users", "u")
 
 	t.Run("Single", func(t *testing.T) {
-		s := mockInsertUser.Insert(map[string]any{"name": "foo", "gender": "male"})
+		s := mockInsertUser.Model(map[string]any{"name": "foo", "gender": "male"})
 		test.Equal(t, s.SQL(), `INSERT INTO "users" ("name", "gender") VALUES ('foo', 'male')`)
 	})
 
 	t.Run("Multiple", func(t *testing.T) {
-		s := mockInsertUser.Insert(
+		s := mockInsertUser.Model(
 			map[string]any{"name": "foo"},
 			map[string]any{"gender": "male"},
 		)
 		test.Equal(t, s.SQL(), `INSERT INTO "users" ("name", "gender") VALUES ('foo', DEFAULT), (DEFAULT, 'male')`)
+	})
+}
+
+func TestUpdate(t *testing.T) {
+	mockUpdateUser := mockUpdateStmt.Table("users", "u")
+
+	t.Run("Single", func(t *testing.T) {
+		s := mockUpdateUser.Model(map[string]any{"name": "foo", "gender": "male"})
+		test.Equal(t, s.SQL(), `UPDATE "users" SET "name"='foo', "gender"='male'`)
+	})
+
+	t.Run("Multiple", func(t *testing.T) {
+		s := mockUpdateUser.Model(
+			map[string]any{"name": "foo"},
+			map[string]any{"gender": "male"},
+		)
+		test.Equal(t, s.SQL(), `UPDATE "users" SET "name"='foo'; UPDATE "users" SET "gender"='male'`)
 	})
 }
 
