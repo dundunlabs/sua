@@ -31,6 +31,7 @@ type stmt struct {
 	models []map[string]any
 	limit  int
 	offset int
+	orders orders
 }
 
 func (s *stmt) Table(name string, alias string) *stmt {
@@ -60,6 +61,12 @@ func (s *stmt) Limit(v int) *stmt {
 func (s *stmt) Offset(v int) *stmt {
 	ns := s.clone()
 	ns.offset = v
+	return ns
+}
+
+func (s *stmt) Order(col string, sort Sort) *stmt {
+	ns := s.clone()
+	ns.orders = append(ns.orders, order{col: col, sort: sort})
 	return ns
 }
 
@@ -158,6 +165,10 @@ func (s *stmt) selectSql() string {
 		if ws := s.wc.string(ns); ws != "" {
 			r += " WHERE " + ws
 		}
+	}
+
+	if os := s.orders.string(ns); os != "" {
+		r += fmt.Sprintf(" ORDER BY %s", os)
 	}
 
 	r += s.limitOffsetString()

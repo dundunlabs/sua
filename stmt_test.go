@@ -91,4 +91,12 @@ func TestStmt(t *testing.T) {
 		s := mockSelectStmt.Table("users", "u").Limit(25).Offset(100)
 		test.Equal(t, s.SQL(), `SELECT "u".* FROM "users" AS "u" LIMIT 25 OFFSET 100`)
 	})
+
+	t.Run("Order", func(t *testing.T) {
+		s1 := mockSelectStmt.Table("users", "u").Order("name", SortASC)
+		s2 := s1.Order("gender", SortDESC)
+
+		test.Equal(t, s1.SQL(), `SELECT "u".* FROM "users" AS "u" ORDER BY "u"."name" ASC`)
+		test.Equal(t, s2.SQL(), `SELECT "u".* FROM "users" AS "u" ORDER BY "u"."name" ASC, "u"."gender" DESC`)
+	})
 }
