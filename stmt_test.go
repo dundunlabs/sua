@@ -86,4 +86,9 @@ func TestStmt(t *testing.T) {
 		test.Equal(t, s3.SQL(), `DELETE FROM "users" AS "u" WHERE NOT (("u"."age" = 18)) OR NOT (("u"."age" = 20)) AND NOT (("u"."gender" = 'male'))`)
 		test.Equal(t, s4.SQL(), `UPDATE "users" SET "name"='Foo Bar' WHERE ((("id" = 1)) OR (("id" = 2))) AND NOT ((("id" = 3)) OR (("id" = 4)))`)
 	})
+
+	t.Run("LimitOffset", func(t *testing.T) {
+		s := mockSelectStmt.Table("users", "u").Limit(25).Offset(100)
+		test.Equal(t, s.SQL(), `SELECT "u".* FROM "users" AS "u" LIMIT 25 OFFSET 100`)
+	})
 }

@@ -29,6 +29,8 @@ type stmt struct {
 	cols   columns
 	wc     *whereClause
 	models []map[string]any
+	limit  int
+	offset int
 }
 
 func (s *stmt) Table(name string, alias string) *stmt {
@@ -46,6 +48,18 @@ func (s *stmt) Select(cols ...string) *stmt {
 func (s *stmt) Model(models ...map[string]any) *stmt {
 	ns := s.clone()
 	ns.models = append(ns.models, models...)
+	return ns
+}
+
+func (s *stmt) Limit(v int) *stmt {
+	ns := s.clone()
+	ns.limit = v
+	return ns
+}
+
+func (s *stmt) Offset(v int) *stmt {
+	ns := s.clone()
+	ns.offset = v
 	return ns
 }
 
@@ -146,6 +160,8 @@ func (s *stmt) selectSql() string {
 		}
 	}
 
+	r += s.limitOffsetString()
+
 	return r
 }
 
@@ -234,6 +250,17 @@ func (s *stmt) deleteSql() string {
 		}
 	}
 
+	return r
+}
+
+func (s *stmt) limitOffsetString() string {
+	r := ""
+	if s.limit > 0 {
+		r += fmt.Sprintf(" LIMIT %d", s.limit)
+	}
+	if s.offset > 0 {
+		r += fmt.Sprintf(" OFFSET %d", s.offset)
+	}
 	return r
 }
 
