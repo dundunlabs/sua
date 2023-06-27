@@ -2,8 +2,10 @@ package sua
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
+	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 )
 
@@ -25,6 +27,7 @@ type stmt struct {
 	op     stmtOp
 	table  table
 	cols   columns
+	wc     *whereClause
 	models []map[string]any
 }
 
@@ -46,6 +49,71 @@ func (s *stmt) Model(models ...map[string]any) *stmt {
 	return ns
 }
 
+func (s *stmt) Where(values ...map[string]any) *stmt {
+	return s.where(values...)
+}
+
+func (s *stmt) WhereGroup(g *stmt) *stmt {
+	return s.whereGroup(g)
+}
+
+func (s *stmt) WhereNot(values ...map[string]any) *stmt {
+	ns := s.Where(values...)
+	ns.wc.not = true
+	return ns
+}
+
+func (s *stmt) WhereNotGroup(g *stmt) *stmt {
+	ns := s.whereGroup(g)
+	ns.wc.not = true
+	return ns
+}
+
+func (s *stmt) And(values ...map[string]any) *stmt {
+	return s.where(values...)
+}
+
+func (s *stmt) AndGroup(g *stmt) *stmt {
+	return s.whereGroup(g)
+}
+
+func (s *stmt) AndNot(values ...map[string]any) *stmt {
+	ns := s.And(values...)
+	ns.wc.not = true
+	return ns
+}
+
+func (s *stmt) AndNotGroup(g *stmt) *stmt {
+	ns := s.whereGroup(g)
+	ns.wc.not = true
+	return ns
+}
+
+func (s *stmt) Or(values ...map[string]any) *stmt {
+	ns := s.where(values...)
+	ns.wc.or = true
+	return ns
+}
+
+func (s *stmt) OrGroup(g *stmt) *stmt {
+	ns := s.whereGroup(g)
+	ns.wc.or = true
+	return ns
+}
+
+func (s *stmt) OrNot(values ...map[string]any) *stmt {
+	ns := s.Or(values...)
+	ns.wc.not = true
+	return ns
+}
+
+func (s *stmt) OrNotGroup(g *stmt) *stmt {
+	ns := s.whereGroup(g)
+	ns.wc.or = true
+	ns.wc.not = true
+	return ns
+}
+
 func (s *stmt) SQL() string {
 	switch s.op {
 	case opSelect:
@@ -64,13 +132,21 @@ func (s *stmt) SQL() string {
 func (s *stmt) selectSql() string {
 	ns := s.table.aliasOrName()
 
-	return fmt.Sprintf(
+	r := fmt.Sprintf(
 		"%s %s FROM %q AS %q",
 		s.op,
 		s.cols.string(ns),
 		s.table.name,
 		ns,
 	)
+
+	if s.wc != nil {
+		if ws := s.wc.string(ns); ws != "" {
+			r += " WHERE " + ws
+		}
+	}
+
+	return r
 }
 
 func (s *stmt) insertSql() string {
@@ -109,9 +185,19 @@ func (s *stmt) insertSql() string {
 
 func (s *stmt) updateSql() string {
 	updates := []string{}
+	ws := ""
+	if s.wc != nil {
+		if w := s.wc.string(""); w != "" {
+			ws = " WHERE " + w
+		}
+	}
 	for _, m := range s.models {
 		values := []string{}
-		for k, v := range m {
+		cols := maps.Keys(m)
+		sort.Strings(cols)
+
+		for _, k := range cols {
+			v := m[k]
 			switch v := v.(type) {
 			case string:
 				values = append(values, fmt.Sprintf("%q='%s'", k, v))
@@ -120,11 +206,13 @@ func (s *stmt) updateSql() string {
 			}
 		}
 		u := fmt.Sprintf(
-			"%s %q SET %s",
+			"%s %q SET %s%s",
 			opUpdate,
 			s.table.name,
 			strings.Join(values, ", "),
+			ws,
 		)
+
 		updates = append(updates, u)
 	}
 	return strings.Join(updates, "; ")
@@ -133,12 +221,60 @@ func (s *stmt) updateSql() string {
 func (s *stmt) deleteSql() string {
 	ns := s.table.aliasOrName()
 
-	return fmt.Sprintf(
+	r := fmt.Sprintf(
 		"%s FROM %q AS %q",
 		s.op,
 		s.table.name,
 		ns,
 	)
+
+	if s.wc != nil {
+		if ws := s.wc.string(ns); ws != "" {
+			r += " WHERE " + ws
+		}
+	}
+
+	return r
+}
+
+func (s *stmt) where(values ...map[string]any) *stmt {
+	return s.whereFunc(func(w *whereClause) *whereClause {
+		g := whereClause{}
+
+		for _, value := range values {
+			fields := maps.Keys(value)
+			sort.Strings(fields)
+
+			for _, k := range fields {
+				v := value[k]
+				c := cond{
+					field: k,
+					op:    "=",
+					value: v,
+				}
+
+				g = g.append(func(w *whereClause) {
+					w.cond = c
+				})
+			}
+		}
+
+		w.cond = condGroup(g)
+		return w
+	})
+}
+
+func (s *stmt) whereGroup(g *stmt) *stmt {
+	return s.whereFunc(func(w *whereClause) *whereClause {
+		w.cond = condGroup(*g.wc)
+		return w
+	})
+}
+
+func (s *stmt) whereFunc(fn func(w *whereClause) *whereClause) *stmt {
+	ns := s.clone()
+	ns.wc = fn(&whereClause{before: s.wc})
+	return ns
 }
 
 func (s *stmt) fields() []string {
@@ -150,6 +286,7 @@ func (s *stmt) fields() []string {
 			}
 		}
 	}
+	sort.Strings(fields)
 	return fields
 }
 

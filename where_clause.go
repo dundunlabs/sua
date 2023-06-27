@@ -7,6 +7,15 @@ type whereClause struct {
 	before *whereClause
 }
 
+func (w whereClause) append(fn func(w *whereClause)) whereClause {
+	nw := w
+	if w.cond != nil {
+		nw = whereClause{before: &w}
+	}
+	fn(&nw)
+	return nw
+}
+
 func (w whereClause) string(ns string) string {
 	cond := w.cond.string(ns)
 	r := cond
